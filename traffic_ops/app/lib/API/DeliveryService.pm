@@ -21,12 +21,6 @@ package API::DeliveryService;
 use UI::Utils;
 use Mojo::Base 'Mojolicious::Controller';
 use Data::Dumper;
-use POSIX qw(strftime);
-use Time::HiRes qw(gettimeofday tv_interval);
-use Math::Round qw(nearest);
-use Extensions::Delegate::Metrics;
-use Extensions::Delegate::Statistics;
-Utils::Helper::Extensions->use;
 use Common::ReturnCodes qw(SUCCESS ERROR);
 
 my $valid_server_types = {
@@ -100,6 +94,7 @@ sub get_data {
 			@data, {
 				"id"                   => $row->id,
 				"xmlId"                => $row->xml_id,
+				"displayName"          => $row->display_name,
 				"dscp"                 => $row->dscp,
 				"signed"               => \$row->signed,
 				"qstringIgnore"        => $row->qstring_ignore,
@@ -107,6 +102,7 @@ sub get_data {
 				"httpBypassFqdn"       => $row->http_bypass_fqdn,
 				"dnsBypassIp"          => $row->dns_bypass_ip,
 				"dnsBypassIp6"         => $row->dns_bypass_ip6,
+				"dnsBypassCname"       => $row->dns_bypass_cname,
 				"dnsBypassTtl"         => $row->dns_bypass_ttl,
 				"orgServerFqdn"        => $row->org_server_fqdn,
 				"multiSiteOrigin"      => $row->multi_site_origin,
@@ -119,6 +115,7 @@ sub get_data {
 				"headerRewrite"        => $row->edge_header_rewrite,
 				"edgeHeaderRewrite"    => $row->edge_header_rewrite,
 				"midHeaderRewrite"     => $row->mid_header_rewrite,
+				"trResponseHeaders"    => $row->tr_response_headers,
 				"regexRemap"           => $row->regex_remap,
 				"longDesc"             => $row->long_desc,
 				"longDesc1"            => $row->long_desc_1,
@@ -135,35 +132,11 @@ sub get_data {
 				"rangeRequestHandling" => $row->range_request_handling,
 				"cacheurl"             => $row->cacheurl,
 				"remapText"            => $row->remap_text,
+				"initialDispersion"   => $row->initial_dispersion,
 			}
 		);
 	}
 	return $self->success( \@data );
-}
-
-sub get_summary {
-	my $self = shift;
-
-	my $id = $self->param('id');
-
-	if ( $self->is_valid_delivery_service($id) ) {
-		if ( $self->is_delivery_service_assigned($id) || &is_admin($self) || &is_oper($self) ) {
-			my $stats = new Extensions::Delegate::Statistics($self);
-			my ( $rc, $result ) = $stats->get_summary();
-			if ( $rc == SUCCESS ) {
-				return $self->success($result);
-			}
-			else {
-				return $self->alert($result);
-			}
-		}
-		else {
-			$self->forbidden();
-		}
-	}
-	else {
-		$self->success( {} );
-	}
 }
 
 sub routing {
@@ -196,31 +169,6 @@ sub routing {
 	}
 	else {
 		$self->not_found();
-	}
-}
-
-sub metrics {
-	my $self = shift;
-	my $id   = $self->param("id");
-
-	if ( $self->is_valid_delivery_service($id) ) {
-		if ( $self->is_delivery_service_assigned($id) || &is_admin($self) || &is_oper($self) ) {
-
-			my $m = new Extensions::Delegate::Metrics($self);
-			my ( $rc, $result ) = $m->get_etl_metrics();
-			if ( $rc == SUCCESS ) {
-				return $self->success($result);
-			}
-			else {
-				return $self->alert($result);
-			}
-		}
-		else {
-			$self->forbidden();
-		}
-	}
-	else {
-		$self->alert( "Invalid deliveryservice id: " . $id );
 	}
 }
 
@@ -363,31 +311,6 @@ sub state {
 	else {
 		$self->not_found();
 	}
-}
-
-sub peakusage {
-	my $self = shift;
-	my $dsid = $self->param('ds');
-	if ( $self->is_valid_delivery_service($dsid) ) {
-
-		if ( $self->is_delivery_service_assigned($dsid) || &is_admin($self) || &is_oper($self) ) {
-			my $stats = new Extensions::Delegate::Statistics($self);
-			my ( $rc, $result ) = $stats->get_daily_usage();
-			if ( $rc == SUCCESS ) {
-				$self->success($result);
-			}
-			else {
-				$self->alert($result);
-			}
-		}
-		else {
-			return $self->forbidden();
-		}
-	}
-	else {
-		$self->success( {} );
-	}
-
 }
 
 1;
